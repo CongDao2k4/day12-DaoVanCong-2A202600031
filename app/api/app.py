@@ -146,6 +146,16 @@ def _get_graph() -> CompiledStateGraph:
 def _graph_mode_label() -> str:
     return 'agent' if graph_uses_messages() else 'stub'
 
+@app.get("/", tags=["Health"])
+def root():
+    """Trang chủ: Trả về trạng thái cơ bản để Railway Healthcheck thành công."""
+    return {
+        "message": "Welcome to StudentOps API",
+        "status": "online",
+        "docs": "/docs",
+        "timestamp": time.time()
+    }
+
 @app.get('/health', tags=['Health'])
 def health():
     """Liveness probe: Trả về 200 OK nếu app đang chạy."""
