@@ -94,7 +94,7 @@ Mặc dù được triển khai trên Railway, chúng tôi đã xem xét cấu h
 ![Health Check](screenshots/health.png)
 
 3. **Interactive API Documentation (Swagger UI)**
-![API Docs](screenshots/docs.png)
+![API Docs](screenshots/docsAPI.png)
 
 4. **Automated Test Results (Production Ready)**
 ![Test Pass](screenshots/test.png)

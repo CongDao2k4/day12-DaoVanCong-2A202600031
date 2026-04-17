@@ -6,13 +6,13 @@
 
 ---
 
-## 🌐 Public URL
+## Public URL
 
 **[https://just-solace-production-1642.up.railway.app/](https://just-solace-production-1642.up.railway.app/)**
 
 ---
 
-## 🏗 Platform & Infrastructure
+## Platform & Infrastructure
 
 **Railway (Cloud PaaS)** — Hệ thống được triển khai dưới dạng container hóa (Docker) trên nền tảng Railway. Toàn bộ quy trình từ Build đến Deploy đều được tự động hóa qua luồng CI/CD từ GitHub.
 
@@ -53,7 +53,7 @@ Internet
 
 ---
 
-## 📡 Test Commands & Results
+## Test Commands & Results
 
 ### 1. Health & Readiness Check
 
@@ -137,19 +137,20 @@ Railway sẽ tự động thực hiện:
 
 ---
 
-## 📸 Screenshots Checklist
+## Screenshots Checklist
 - [x] **Railway Dashboard**: Trạng thái `Active` xanh mướt.
+- [x] **Build Log**: Log khi chạy hệ thống trước khi Active.
 - [x] **Health Check**: Kết quả JSON trả về `status: ok`.
 - [x] **API Docs**: Giao diện Swagger UI chuyên nghiệp.
 - [x] **Test Results**: Ảnh chụp terminal chạy `python test_features.py` đạt 100%.
 
 ---
 
-## 🛡 Security & Operations Notes
+## Security & Operations Notes
 - [x] Không commit file `.env` chứa bí mật.
 - [x] Chế độ `production` thực thi kiểm tra Key nghiêm ngặt.
 - [x] Giới hạn tốc độ (Rate Limit) bảo vệ tài nguyên LLM.
 - [x] Xử lý tắt ứng dụng êm ái (Graceful Shutdown) bảo vệ kết nối Database.
 
 ---
-**Deployment Status:** 🟢 Live & Healthy
+**Deployment Status:** Live & Healthy
