@@ -1,8 +1,8 @@
 #  Delivery Checklist — Day 12 Lab Submission
 
-> **Student Name:** _________________________  
-> **Student ID:** _________________________  
-> **Date:** _________________________
+> **Student Name:** Dao Van Cong
+> **Student ID:** 2A202600031
+> **Date:** 17/04/2026
 
 ---
 
@@ -33,14 +33,15 @@ Create a file `MISSION_ANSWERS.md` with your answers to all exercises:
 ## Part 2: Docker
 
 ### Exercise 2.1: Dockerfile questions
-1. Base image: [Your answer]
-2. Working directory: [Your answer]
-...
+1. Base image: python:3.11-slim
+2. Working directory: /app
+3. Why COPY requirements.txt first?: tận dụng Layer Caching, giúp build nhanh hơn nếu code thay đổi nhưng thư viện giữ nguyên
+4. CMD vs ENTRYPOINT: ENTRYPOINT là lệnh thực thi chính, CMD cung cấp tham số mặc định có thể ghi đè
 
 ### Exercise 2.3: Image size comparison
-- Develop: [X] MB
-- Production: [Y] MB
-- Difference: [Z]%
+- Develop: 1660 MB
+- Production: 236 MB
+- Difference: 85.8%
 
 ## Part 3: Cloud Deployment
 
@@ -143,16 +144,16 @@ curl -X POST https://your-agent.railway.app/ask \
 
 ##  Pre-Submission Checklist
 
-- [ ] Repository is public (or instructor has access)
-- [ ] `MISSION_ANSWERS.md` completed with all exercises
-- [ ] `DEPLOYMENT.md` has working public URL
-- [ ] All source code in `app/` directory
-- [ ] `README.md` has clear setup instructions
-- [ ] No `.env` file committed (only `.env.example`)
-- [ ] No hardcoded secrets in code
-- [ ] Public URL is accessible and working
-- [ ] Screenshots included in `screenshots/` folder
-- [ ] Repository has clear commit history
+- [x] Repository is public (or instructor has access)
+- [x] `MISSION_ANSWERS.md` completed with all exercises
+- [x] `DEPLOYMENT.md` has working public URL
+- [x] All source code in `app/` directory
+- [x] `README.md` has clear setup instructions
+- [x] No `.env` file committed (only `.env.example`)
+- [x] No hardcoded secrets in code
+- [x] Public URL is accessible and working
+- [x] Screenshots included in `screenshots/` folder
+- [x] Repository has clear commit history
 
 ---
 
