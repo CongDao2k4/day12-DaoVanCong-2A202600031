@@ -24,4 +24,7 @@ ENV PORT=8000
 EXPOSE 8000
 
 # Lệnh bắt đầu đơn giản nhất
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Sử dụng biến môi trường $PORT thay vì số 8000 cố định
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+
