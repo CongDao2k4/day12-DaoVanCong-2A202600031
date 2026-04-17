@@ -1,55 +1,62 @@
 """Production config — 12-Factor: tất cả từ environment variables."""
 import os
 import logging
-from dataclasses import dataclass, field
+from typing import Literal, Optional
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
-
-@dataclass
-class Settings:
+class Settings(BaseSettings):
     # Server
-    host: str = field(default_factory=lambda: os.getenv("HOST", "0.0.0.0"))
-    port: int = field(default_factory=lambda: int(os.getenv("PORT", "8000")))
-    environment: str = field(default_factory=lambda: os.getenv("ENVIRONMENT", "development"))
-    debug: bool = field(default_factory=lambda: os.getenv("DEBUG", "false").lower() == "true")
-
-    # App
-    app_name: str = field(default_factory=lambda: os.getenv("APP_NAME", "Production AI Agent"))
-    app_version: str = field(default_factory=lambda: os.getenv("APP_VERSION", "1.0.0"))
-
-    # LLM
-    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
-    llm_model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "gpt-4o-mini"))
+    host: str = Field(default="0.0.0.0")
+    port: int = Field(default=8000)
+    environment: str = Field(default="development")
+    debug: bool = Field(default=False)
 
     # Security
-    agent_api_key: str = field(default_factory=lambda: os.getenv("AGENT_API_KEY", "dev-key-change-me"))
-    jwt_secret: str = field(default_factory=lambda: os.getenv("JWT_SECRET", "dev-jwt-secret"))
-    allowed_origins: list = field(
-        default_factory=lambda: os.getenv("ALLOWED_ORIGINS", "*").split(",")
-    )
+    agent_api_key: str = Field(default="dao-van-cong-secret-123")
+    
+    # LLM
+    google_api_key: Optional[str] = Field(default=None)
+    gemini_model: str = Field(default="gemini-1.5-flash")
 
-    # Rate limiting
-    rate_limit_per_minute: int = field(
-        default_factory=lambda: int(os.getenv("RATE_LIMIT_PER_MINUTE", "20"))
-    )
+    # Databases
+    database_url: Optional[str] = Field(default=None)
+    ctsv_database_url: Optional[str] = Field(default=None)
 
-    # Budget
-    daily_budget_usd: float = field(
-        default_factory=lambda: float(os.getenv("DAILY_BUDGET_USD", "5.0"))
-    )
+    # SMTP for Email tools
+    smtp_host: Optional[str] = Field(default=None)
+    smtp_port: Optional[int] = Field(default=587)
+    smtp_user: Optional[str] = Field(default=None)
+    smtp_password: Optional[str] = Field(default=None)
+    smtp_from: Optional[str] = Field(default=None)
+    smtp_tls_mode: Literal["starttls", "ssl"] = Field(default="starttls")
 
-    # Storage
-    redis_url: str = field(default_factory=lambda: os.getenv("REDIS_URL", ""))
+    # Redis (Optional for history/rate limiting)
+    redis_url: Optional[str] = Field(default=None)
 
-    def validate(self):
-        logger = logging.getLogger(__name__)
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    def validate_production(self):
         if self.environment == "production":
-            if self.agent_api_key == "dev-key-change-me":
-                raise ValueError("AGENT_API_KEY must be set in production!")
-            if self.jwt_secret == "dev-jwt-secret":
-                raise ValueError("JWT_SECRET must be set in production!")
-        if not self.openai_api_key:
-            logger.warning("OPENAI_API_KEY not set — using mock LLM")
+            if self.agent_api_key == "dao-van-cong-secret-123":
+                raise ValueError("BẮT BUỘC phải thay đổi AGENT_API_KEY trong production!")
+            if not self.google_api_key:
+                raise ValueError("GOOGLE_API_KEY là bắt buộc trong production!")
         return self
 
+# Singleton instance
+settings = Settings().validate_production()
 
-settings = Settings().validate()
+# Legacy getters for backward compatibility if needed, 
+# but better to use `settings` directly.
+def get_database_url() -> Optional[str]:
+    return settings.database_url
+
+def get_ctsv_database_url() -> Optional[str]:
+    return settings.ctsv_database_url
+
+def get_google_api_key() -> Optional[str]:
+    return settings.google_api_key
+
+def get_gemini_model() -> str:
+    return settings.gemini_model

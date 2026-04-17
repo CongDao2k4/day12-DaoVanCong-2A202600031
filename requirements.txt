@@ -1,7 +1,15 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.0
 pydantic==2.9.0
+pydantic-settings==2.5.2
 pyjwt==2.9.0
 python-dotenv==1.0.1
 redis==5.1.0
 psutil==6.0.0
+langchain==0.2.14
+langchain-core==0.2.33
+langchain-google-genai==1.0.8
+langgraph==0.2.7
+psycopg[binary]==3.2.1
+rich==13.8.1
+python-multipart==0.0.9

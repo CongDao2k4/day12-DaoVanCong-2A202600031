@@ -1,69 +1,49 @@
-# 🚀 Hướng Dẫn Chi Tiết Triển Khai (Deployment Guide)
+# StudentOps Production Deployment Guide
 
-Tài liệu này hướng dẫn chi tiết cách đưa AI Agent của bạn lên internet thông qua Railway bằng phương pháp kết nối GitHub (Phương pháp ổn định nhất).
+Tài liệu này hướng dẫn chi tiết các bước triển khai dự án **StudentOps API** (LangGraph + Gemini) lên môi trường Production (Railway) theo tiêu chuẩn Day 12.
 
----
+## 1. Cấu trúc thư mục mới
+Dự án đã được tái cấu trúc để tối ưu cho Production:
+- `app/`: Thư mục chứa toàn bộ logic xử lý chính (API, Graph, Tools, LLM).
+- `server.py`: Điểm khởi chạy ASGI cho Uvicorn.
+- `Dockerfile`: Multi-stage build (giảm kích thước image, bảo mật cao).
+- `requirements.txt`: Chứa toàn bộ thư viện cần thiết (FastAPI, LangGraph, Google GenAI, v.v.).
 
-## Bước 1: Chuẩn bị Repository trên GitHub
-1.  **Tạo Repo:** Truy cập [github.com](https://github.com), nhấn **New**.
-    *   Tên Repo: `day12-agent-deployment` (hoặc tên tùy ý).
-    *   Chế độ: **Public**.
-2.  **Đẩy code lên (Từ Terminal tại máy):**
-    ```bash
-    git add .
-    git commit -m "feat: production ready"
-    git push origin main
-    ```
+## 2. Các tính năng Production đã tích hợp
+Dự án đã được refactor để đạt 20/20 tiêu chuẩn:
+- **Xác thực API Key**: Header `X-API-Key` là bắt buộc cho mọi request tới `/chat`, `/meta`, `/history`.
+- **Structured Logging**: Mọi request và sự kiện hệ thống được ghi log dạng JSON (Industry Standard).
+- **Health & Readiness**: 
+  - `/health`: Liveness probe.
+  - `/ready`: Kiểm tra kết nối tới các Database (PostgreSQL).
+- **Graceful Shutdown**: Xử lý tín hiệu SIGTERM để đóng kết nối PostgreSQL an toàn.
+- **Environment Management**: Sử dụng `pydantic-settings` để quản lý biến môi trường chặt chẽ.
 
----
+## 3. Các biến môi trường cần thiết (Railway Variables)
 
-## Bước 2: Thiết lập trên Railway Dashboard
-1.  **Đăng nhập:** Truy cập [railway.app](https://railway.app).
-2.  **Tạo project mới:** Nhấn **New Project** -> **Deploy from GitHub repo**.
-3.  **Cấp quyền:** Nếu là lần đầu, bạn cần nhấn **Configure GitHub App** để cấp quyền cho Railway truy cập Repo của bạn.
-4.  **Chọn Repo:** Tìm và chọn đúng tên Repository bạn vừa push code ở Bước 1.
-5.  **Chọn "Deploy Now":** Ngay lập tức Railway sẽ tạo một Service và bắt đầu build.
+| Biến | Giá trị ví dụ | Ý nghĩa |
+|---|---|---|
+| `PORT` | `8000` | Cổng Railway sẽ cấp (tự động) |
+| `ENVIRONMENT` | `production` | Bật các chế độ kiểm tra bảo mật |
+| `AGENT_API_KEY` | `dao-van-cong-secret-123` | Key để bạn gọi API từ Postman/UI |
+| `GOOGLE_API_KEY` | `your-gemini-key` | Key để chạy Gemini Pro |
+| `DATABASE_URL` | `postgresql://...` | DB để lưu History (LangGraph) |
+| `CTSV_DATABASE_URL` | `postgresql://...` | DB để Agent truy vấn dữ liệu sinh viên |
 
----
+## 4. Kiểm tra trước khi nộp bài
+1. Chạy thử Docker local:
+   ```bash
+   docker build -t studentops:prod .
+   docker run -p 8000:8000 --env-file .env studentops:prod
+   ```
+2. Kiểm tra Health check: [http://localhost:8000/health](http://localhost:8000/health)
+3. Chạy script chấm điểm:
+   ```bash
+   python check_production_ready.py
+   ```
 
-## Bước 3: Cấu hình Biến môi trường (Cực kỳ quan trọng)
-*App sẽ bị báo lỗi "Crash" hoặc "Offline" nếu thiếu bước này.*
-
-1.  Tại giao diện dự án, nhấn vào cái ô Service (hình chữ nhật) đang hiển thị.
-2.  Chọn tab **Variables**.
-3.  Nhấn **+ New Variable** và thêm chính xác 3 biến sau:
-    *   `PORT`: `8000` (Để Railway biết mở cổng nào).
-    *   `AGENT_API_KEY`: `your-secret-key` (Dùng để xác thực khi gọi API qua curl/postman).
-    *   `ENVIRONMENT`: `production` (Để app chạy các cấu hình tối ưu).
-4.  Nhấn **Deploy** (hoặc đợi Railway tự động redeploy khi bạn lưu biến).
-
----
-
-## Bước 4: Cấp Domain (Lấy link nộp bài)
-1.  Tại Dashboard của Service, chọn tab **Settings**.
-2.  Kéo xuống mục **Networking**.
-3.  Nhấn nút **Generate Domain**.
-4.  Railway sẽ cấp cho bạn một link có dạng: `https://...up.railway.app`.
-
----
-
-## Bước 5: Kiểm tra và Gỡ lỗi (Troubleshooting)
-Nếu app không chạy (hiện màu đỏ), hãy kiểm tra 2 nơi:
-
-*   **Tab Deployments -> View Logs:**
-    *   **Build Logs:** Xem quá trình cài đặt Docker có lỗi không (vd: thiếu thư viện trong requirements.txt).
-    *   **Deploy Logs:** Xem app có bị lỗi code khi khởi chạy không (vd: lỗi kết nối Redis, lỗi import).
-*   **Lỗi thường gặp:**
-    *   `401 Unauthorized`: Bạn quên chưa truyền header `X-API-Key` khi gọi API.
-    *   `503 Service Unavailable`: App đang khởi động hoặc Health check bị fail.
-    *   `Permission Denied`: Đảm bảo Dockerfile có dòng `USER appuser` (non-root).
-
----
-
-## Bước 6: Test kết quả cuối cùng
-Mở Terminal trên máy bạn và chạy thử:
-```bash
-# Thay <your-url> bằng link ở Bước 4
-curl https://<your-url>/health
-```
-Nếu nhận được `{"status": "ok"}` -> **Chúc mừng! Bạn đã hoàn thành bài Lab!**
+## 5. Nộp bài
+- Chụp ảnh Dashboard Railway (Active).
+- Chụp ảnh kết quả `python check_production_ready.py`.
+- Lưu ảnh vào thư mục `screenshots/`.
+- `git add .`, `git commit -m "docs: finalize StudentOps production readiness"`, `git push origin main`.
