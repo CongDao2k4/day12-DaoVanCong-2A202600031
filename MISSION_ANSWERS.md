@@ -1,69 +1,100 @@
-# Day 12 Lab - Mission Answers: StudentOps AI Agent
-**Học viên:** Đào Văn Công  
-**MSSV:** 2A202600031
+# Lab 12 Report: StudentOps AI Agent Deployment
+
+**Student Name:** Đào Văn Công  
+**Student ID:** 2A202600031  
+**Status:** Production (Railway)
 
 ---
 
-## Part 1: Localhost vs Production
+## Part 1: Local vs Production Environment Comparison
 
-### Exercise 1.1: Anti-patterns found
-1. **Lộ bí mật (Hardcoded Secrets)**: API Key của project và biến DB được ghi trực tiếp trong mã nguồn thay vì dùng biến môi trường.
-2. **Thiếu xác thực (No Authentication)**: Bất kỳ ai cũng có thể gọi API mà không cần mã bảo vệ.
-3. **Thiếu giám sát (No Health Checks)**: Hệ thống không có endpoint để tự động kiểm tra trạng thái sống/chết.
-4. **Log dạng văn bản thô**: Khó phân tích tự động bằng các công cụ hiện đại.
+### 1.1 Analysis of Issues in the Initial Version
+Trong quá trình chuyển đổi sang môi trường Production, chúng tôi đã xác định và khắc phục các vấn đề sau trong mã nguồn gốc:
 
-### Exercise 1.3: Comparison table
-| Feature | Develop | Production | Why Important? |
-|---------|---------|------------|----------------|
-| Config  | Cố định (Port 8000) | Linh hoạt | Để tương thích với Railway/Cloud. |
-| Auth    | Không có | X-API-Key Header | Đề phòng truy cập trái phép và bảo vệ tài nguyên LLM vì dùng API_KEY gọi model. |
-| State   | Trong bộ nhớ (Memory) | Cơ sở dữ liệu (Postgres) | Đảm bảo không mất lịch sử chat khi hệ thống khởi động lại. |
+*   **Security Risks (Secrets Exposure)**: Các thông tin nhạy cảm như `GOOGLE_API_KEY` ban đầu bị ghi trực tiếp (hardcode). Chúng tôi đã chuyển sang sử dụng `pydantic-settings` để quản lý cấu hình thông qua biến môi trường.
+*   **Lack of Self-healing**: Phiên bản cũ thiếu endpoint để theo dõi trạng thái hệ thống. Chúng tôi đã bổ sung `/health` để giúp hạ tầng đám mây tự động phát hiện và khởi động lại container khi có lỗi xảy ra.
+*   **Resource Exhaustion Risk (Spam/Abuse)**: Không có cơ chế nào để ngăn chặn người dùng gửi yêu cầu liên tục. Hệ thống StudentOps hiện tại đã tích hợp Middleware giới hạn 10 yêu cầu/phút.
+*   **Conversation Data Loss**: Việc lưu lịch sử trong RAM khiến dữ liệu bị mất khi ứng dụng khởi động lại. Chúng tôi đã khắc phục điều này bằng cách tích hợp lớp lưu trữ bên ngoài (Postgres).
+*   **Insecure Error Responses**: Chế độ debug ban đầu có thể làm lộ cấu trúc thư mục và phiên bản thư viện. Trong phiên bản Production, các lỗi này đã được ẩn đi sau các mã lỗi HTTP tiêu chuẩn.
 
-## Part 2: Docker
+### 1.2 Technical Specification Comparison
 
-### Exercise 2.1: Dockerfile questions
-1. **Base image**: `python:3.11-slim`
-2. **Working directory**: `/app`
-3. **Layer Caching**: COPY `requirements.txt` trước giúp tận dụng bộ nhớ đệm của Docker để build nhanh hơn nếu code thay đổi mà thư viện giữ nguyên.
-4. **CMD vs ENTRYPOINT**: ENTRYPOINT là lệnh cố định (như `python`) và CMD là các tham số mặc định (như `server.py`). Có thể ghi đè CMD khi chạy lệnh `docker run` nhưng ENTRYPOINT thì không.
+| Feature | Local Environment | Production Environment | Reason for Change |
+|---------|-----------------|------------------------|----------------|
+| **Configuration** | File `.env` cục bộ | Biến trên Railway Dashboard | Bảo mật tuyệt đối, cập nhật dễ dàng mà không cần thay đổi mã nguồn. |
+| **Security** | Không xác thực | X-API-Key & JWT Bearer | Kiểm soát truy cập, bảo vệ ngân sách API Gemini. |
+| **Data** | Bộ nhớ tạm thời | PostgreSQL (Lưu trữ bền vững) | Đảm bảo trải nghiệm hội thoại liên tục cho sinh viên. |
+| **Monitoring** | Theo dõi qua Console | JSON Logging & Health Probes | Hỗ trợ giám sát hệ thống từ xa một cách tự động. |
+| **Shutdown Handling** | Tắt đột ngột | Xử lý tín hiệu SIGTERM | Đóng kết nối cơ sở dữ liệu an toàn, tránh treo kết nối. |
 
-### Exercise 2.3: Image size comparison
-- Develop: 1660 MB
-- Production: 236 MB
-- **Chênh lệch**: 85.8%
+---
 
-### Exercise 2.4: Architecture Diagram
-Dưới đây là sơ đồ luồng dữ liệu và kết nối hạ tầng của hệ thống:
+## Part 2: Docker Optimization
 
-```mermaid
-graph LR
-    Client["Client (User/Postman)"] -- "HTTPS (Port 443)" --> Railway["Railway Edge (Proxy/SSL)"]
-    Railway -- "HTTP (Port $PORT)" --> Agent["FastAPI Agent (Container)"]
-    Agent -- "X-API-Key / JWT" --> Security["Security Middleware"]
-    Agent -- "gRPC" --> Gemini["Google Gemini Pro API"]
-    Agent -- "SQL (Port 5432)" --> Postgres["PostgreSQL (Persistent History)"]
-    Security -- "10 req/min" --> RateLimit["Rate Limiter (In-Memory)"]
-```
+### 2.1 Technical Explanation of Dockerfile
+Dự án StudentOps sử dụng chiến lược Multi-stage build với các mục tiêu cụ thể:
+1.  **Base Image**: Chọn `python:3.11-slim` để cân bằng giữa hiệu suất và dung lượng.
+2.  **Layer Caching**: Tách riêng bước cài đặt `requirements.txt`. Điều này cho phép hệ thống CI/CD chỉ mất vài giây để đóng gói lại nếu chúng ta chỉ thay đổi logic xử lý của Agent mà không thêm thư viện mới.
+3.  **Builder Stage**: Toàn bộ quá trình biên dịch các thư viện nặng và dọn dẹp bộ nhớ đệm (pip cache) được thực hiện tại đây.
+4.  **Runtime Stage**: Chỉ sao chép những gì thực sự cần thiết để chạy ứng dụng, giảm kích thước image xuống còn **236MB** (giảm hơn 85% so với ban đầu).
 
-## Part 3: Cloud Deployment
+---
 
-### Exercise 3.1: Railway deployment
+## Part 3: Cloud Deployment & API Security
+
+### 3.1 Deployment Architecture Model
+Hệ thống vận hành trên hạ tầng Railway với luồng dữ liệu như sau:
+*   **Protocol**: HTTPS (Cổng 443) -> Proxy -> HTTP (Được cấp phát động qua biến `$PORT`).
+*   **Security Flow**: 
+    1. Kiểm tra giới hạn tốc độ (Rate Limit).
+    2. Xác thực mã API (X-API-Key).
+    3. Kiểm tra tính hợp lệ của hội thoại.
+*   **Processing Logic**: Agent (LangGraph) tương tác với Gemini Pro và truy vấn/lưu dữ liệu vào Postgres.
+
+### 3.2 Security Testing Results
+*   **Rate Limiting**: Thử nghiệm bằng cách gửi 15 yêu cầu trong 10 giây -> Hệ thống trả về lỗi **429 Too Many Requests** từ yêu cầu thứ 11.
+*   **Authentication**: Bất kỳ truy cập nào thiếu Header `X-API-Key` hoặc `Authorization` đều bị từ chối với mã lỗi **401 Unauthorized**.
+
+---
+
+## Part 4: Reliability
+
+### 4.1 Stateless Design
+Đây là điểm then chốt cho khả năng mở rộng hệ thống. Bằng cách sử dụng `PostgresSaver` để quản lý các điểm kiểm tra (checkpoints), chúng ta có thể tắt các container cũ và bật các container mới (hoặc chạy nhiều container song song) mà không gây ra bất kỳ sự gián đoạn nào trong trải nghiệm chat của sinh viên.
+
+### 4.2 Graceful Shutdown Mechanism
+Hệ thống đã được lập trình để "lắng nghe" các tín hiệu từ hệ điều hành. Khi Railway yêu cầu ứng dụng dừng lại để triển khai mới, StudentOps sẽ không tắt ngay lập tức mà sẽ đóng các kết nối đang mở một cách tuần tự, đảm bảo tính toàn vẹn của dữ liệu hội thoại.
+
+---
+## Conclusion of Deployment Proof
+
+Dự án đã đạt trạng thái **Production Ready** với các minh chứng sau:
+
+* ### Exercise 3.1: Cloud Deployment (Railway)
 - **URL**: [https://just-solace-production-1642.up.railway.app/](https://just-solace-production-1642.up.railway.app/)
 - **Status**: Active
-- **Screenshot**:
-![Railway Dashboard](screenshots/dashboard.png)
+
+### Exercise 3.2: Compare Railway and Render
+Mặc dù được triển khai trên Railway, chúng tôi đã xem xét cấu hình của Render để đảm bảo tính linh hoạt:
+*   **Railway (`railway.toml`)**: Ưu tiên sự tối giản, tự động phát hiện Dockerfile và quản lý tập trung các biến môi trường.
+*   **Render (`render.yaml`)**: Sử dụng Infrastructure as Code (IaC) chi tiết hơn, cho phép định nghĩa cả Cơ sở dữ liệu và Redis trong cùng một file Blueprint.
+*   **Common Point**: Cả hai đều yêu cầu xử lý các biến `$PORT` động và hỗ trợ Health Check Probes để quản lý vòng đời container.
+
+---
 
 ## Part 4: API Security
 
-### Exercise 4.1-4.3: Test results
-- **Không Key**: Trả về 401 Unauthorized ✅.
-- **Xác thực JWT**: Đã cài đặt endpoint `/login` và middleware kiểm tra Token Bearer ✅.
-- **Rate Limiting**: Giới hạn 10 req/phút, trả về 429 nếu vượt ngưỡng ✅.
-- **Có Key đúng**: Trả về 200 OK cùng nội dung từ AI ✅.
+**System Screenshots:**
 
-## Part 5: Scaling & Reliability
+1. **Railway Admin Interface (Active Status)**
+![Railway Dashboard](screenshots/dashboard.png)
+![Build Log](screenshots/build_log.png)
 
-### Exercise 5.1-5.5: Implementation notes
-- **Liveness/Readiness**: Tích hợp các endpoint `/health` và `/ready` để hạ tầng đám mây tự động phát hiện lỗi.
-- **Graceful Shutdown**: Xử lý tín hiệu `SIGTERM` để đảm bảo đóng kết nối Database an toàn trước khi container bị tắt.
-- **Stateless Design**: Thiết kế không lưu trạng thái trong app để có thể chạy nhiều bản sao cùng lúc.
+2. **Database Connection & Liveness Status**
+![Health Check](screenshots/health.png)
+
+3. **Interactive API Documentation (Swagger UI)**
+![API Docs](screenshots/docs.png)
+
+4. **Automated Test Results (Production Ready)**
+![Test Pass](screenshots/test.png)
