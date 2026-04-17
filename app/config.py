@@ -5,6 +5,9 @@ from typing import Literal, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
+# Type alias needed by email tools
+TlsMode = Literal['starttls', 'ssl']
+
 class Settings(BaseSettings):
     # Server
     host: str = Field(default="0.0.0.0")
@@ -29,7 +32,7 @@ class Settings(BaseSettings):
     smtp_user: Optional[str] = Field(default=None)
     smtp_password: Optional[str] = Field(default=None)
     smtp_from: Optional[str] = Field(default=None)
-    smtp_tls_mode: Literal["starttls", "ssl"] = Field(default="starttls")
+    smtp_tls_mode: TlsMode = Field(default="starttls")
 
     # Redis (Optional for history/rate limiting)
     redis_url: Optional[str] = Field(default=None)
@@ -60,3 +63,21 @@ def get_google_api_key() -> Optional[str]:
 
 def get_gemini_model() -> str:
     return settings.gemini_model
+
+def get_smtp_host() -> Optional[str]:
+    return settings.smtp_host
+
+def get_smtp_port() -> Optional[int]:
+    return settings.smtp_port
+
+def get_smtp_user() -> Optional[str]:
+    return settings.smtp_user
+
+def get_smtp_password() -> Optional[str]:
+    return settings.smtp_password
+
+def get_smtp_from() -> Optional[str]:
+    return settings.smtp_from
+
+def get_smtp_tls_mode() -> TlsMode:
+    return settings.smtp_tls_mode
