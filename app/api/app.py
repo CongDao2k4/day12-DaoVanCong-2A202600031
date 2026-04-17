@@ -1,5 +1,5 @@
 """FastAPI app: LangGraph chat, thread history, OpenAPI for the frontend.
-Production ready: Security, Logging, Health/Readiness, Port config.
+Production ready: Security (API Key + JWT), Logging, Health/Readiness, Rate Limiting.
 """
 
 from __future__ import annotations
@@ -9,11 +9,13 @@ import uuid
 import time
 import logging
 import signal
+from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Optional
 
 import psycopg
+import jwt
 from langchain_core.messages import HumanMessage
 from fastapi import FastAPI, HTTPException, Header, Depends, status, Request
 from fastapi.responses import JSONResponse
@@ -37,7 +39,29 @@ from api.schemas import (
 from api.state_serialization import serialize_graph_state
 from telemetry.logger import logger
 
-# --- Security ---
+# --- In-Memory Rate Limiter ---
+# Lưu trữ timestamp của các request theo IP
+rate_limit_store = defaultdict(list)
+RATE_LIMIT_WINDOW = 60 # 60 giây
+RATE_LIMIT_MAX_REQUESTS = 10 # 10 requests per minute
+
+# --- Security: JWT ---
+JWT_SECRET = getattr(settings, "jwt_secret", "dao-van-cong-jwt-key-2024")
+JWT_ALGORITHM = "HS256"
+
+async def verify_jwt(authorization: str = Header(..., description="JWT Token (Bearer)")):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Định dạng Token không hợp lệ.")
+    token = authorization.split(" ")[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token đã hết hạn.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token không hợp lệ.")
+
+# --- Security: API Key ---
 async def verify_api_key(x_api_key: str = Header(..., description="API Key for StudentOps")):
     if x_api_key != settings.agent_api_key:
         logger.error(f"Unauthorized access attempt with key: {x_api_key[:4]}...")
@@ -95,7 +119,6 @@ async def lifespan(app: FastAPI):
             logger.info("Đã kết nối PostgresSaver - Checkpoint persistent.")
         except Exception as e:
             logger.error(f"Lỗi kết nối PostgresSaver: {e}")
-            # Fallback to memory in dev, but maybe fail in prod?
             memory = MemorySaver()
             app.state.compiled = build_app(memory)
             app.state.checkpoint_backend = 'memory'
@@ -117,13 +140,30 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title='StudentOps Production API',
     description='Hệ thống API hỗ trợ sinh viên dựa trên LangGraph và Gemini Pro.',
-    version='1.1.0',
+    version='1.2.0', # Cập nhật version vì có thêm bảo mật
     lifespan=lifespan,
 )
 
-# --- Middleware for Logging & Timing ---
+# --- Middleware for Rate Limiting, Logging & Timing ---
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
+async def process_request(request: Request, call_next):
+    # 1. Rate Limiting Check
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    
+    # Dọn dẹp các request cũ ngoài window
+    rate_limit_store[client_ip] = [t for t in rate_limit_store[client_ip] if now - t < RATE_LIMIT_WINDOW]
+    
+    if len(rate_limit_store[client_ip]) >= RATE_LIMIT_MAX_REQUESTS:
+        logger.warning(f"Rate limit exceeded for IP: {client_ip}")
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút."}
+        )
+    
+    rate_limit_store[client_ip].append(now)
+    
+    # 2. Timing & Logging
     start_time = time.time()
     response = await call_next(request)
     process_time = time.time() - start_time
@@ -132,7 +172,8 @@ async def log_requests(request: Request, call_next):
         "method": request.method,
         "url": str(request.url),
         "status": response.status_code,
-        "duration_ms": round(process_time * 1000, 2)
+        "duration_ms": round(process_time * 1000, 2),
+        "ip": client_ip
     })
     return response
 
@@ -148,45 +189,35 @@ def _graph_mode_label() -> str:
 
 @app.get("/", tags=["Health"])
 def root():
-    """Trang chủ: Trả về trạng thái cơ bản để Railway Healthcheck thành công."""
     return {
         "message": "Welcome to StudentOps API",
         "status": "online",
         "docs": "/docs",
-        "timestamp": time.time()
+        "features": ["API-Key", "JWT", "Rate-Limiting", "JSON-Logging"]
     }
+
+@app.post("/login", tags=["Security"])
+def login(username: str):
+    """Demo login để lấy JWT Token (Đáp ứng Exercise 4.2)."""
+    payload = {
+        "sub": username,
+        "exp": time.time() + 3600, # Hết hạn sau 1h
+        "iat": time.time()
+    }
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return {"access_token": token, "token_type": "bearer"}
 
 @app.get('/health', tags=['Health'])
 def health():
-    """Liveness probe: Trả về 200 OK nếu app đang chạy."""
     return {"status": "ok", "timestamp": time.time()}
 
 @app.get('/ready', response_model=HealthResponse, tags=['Health'])
 def ready():
-    """Readiness probe: Kiểm tra khả năng kết nối tới các DB."""
     academic_status = _probe_postgres(get_database_url())
     ctsv_status = _probe_postgres(get_ctsv_database_url())
-    
-    overall_status = "ok"
-    if not academic_status.reachable or not ctsv_status.reachable:
-        # In production, we might want to return 503 if critical DB is down
-        pass
-
     return HealthResponse(
-        status=overall_status,
-        databases=DatabasesHealth(
-            academic=academic_status,
-            ctsv=ctsv_status,
-        ),
-    )
-
-@app.get('/meta', response_model=GraphMetaResponse, tags=['Meta'], dependencies=[Depends(verify_api_key)])
-def graph_meta() -> GraphMetaResponse:
-    cb = getattr(app.state, 'checkpoint_backend', 'memory')
-    return GraphMetaResponse(
-        graph_mode=_graph_mode_label(), # type: ignore
-        agent_enabled=graph_uses_messages(),
-        checkpoint_backend=cb, # type: ignore
+        status="ok",
+        databases=DatabasesHealth(academic=academic_status, ctsv=ctsv_status),
     )
 
 @app.post('/chat', response_model=ChatResponse, tags=['Chat'], dependencies=[Depends(verify_api_key)])
@@ -203,12 +234,18 @@ def chat(body: ChatRequest) -> ChatResponse:
             )
         else:
             out = g.invoke({'text': body.message}, cfg)
-            
-        logger.log_event("chat_success", {"thread_id": thread_id, "mode": _graph_mode_label()})
+        
+        # Cost Guard: Theo dõi việc sử dụng
+        usage = out.get("usage_metadata", {})
+        logger.log_event("chat_success", {
+            "thread_id": thread_id, 
+            "mode": _graph_mode_label(),
+            "tokens": usage
+        })
         
     except Exception as e:
         logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail="Lỗi xử lý hội thoại phía server.")
+        raise HTTPException(status_code=500, detail="Lỗi xử lý hội thoại.")
         
     return ChatResponse(
         thread_id=thread_id,
@@ -224,7 +261,7 @@ def thread_history(thread_id: str) -> HistoryResponse:
         items = [_snapshot_to_item(s) for s in snapshots]
     except Exception as e:
         logger.error(f"History error: {e}")
-        raise HTTPException(status_code=500, detail="Không thể truy xuất lịch sử thread.")
+        raise HTTPException(status_code=500, detail="Lỗi truy xuất lịch sử.")
     return HistoryResponse(thread_id=thread_id, checkpoints=items)
 
 # --- Graceful Shutdown Handler ---

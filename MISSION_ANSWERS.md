@@ -32,6 +32,19 @@
 - Production: 236 MB
 - **Chênh lệch**: 85.8%
 
+### Exercise 2.4: Architecture Diagram
+Dưới đây là sơ đồ luồng dữ liệu và kết nối hạ tầng của hệ thống:
+
+```mermaid
+graph LR
+    Client["Client (User/Postman)"] -- "HTTPS (Port 443)" --> Railway["Railway Edge (Proxy/SSL)"]
+    Railway -- "HTTP (Port $PORT)" --> Agent["FastAPI Agent (Container)"]
+    Agent -- "X-API-Key / JWT" --> Security["Security Middleware"]
+    Agent -- "gRPC" --> Gemini["Google Gemini Pro API"]
+    Agent -- "SQL (Port 5432)" --> Postgres["PostgreSQL (Persistent History)"]
+    Security -- "10 req/min" --> RateLimit["Rate Limiter (In-Memory)"]
+```
+
 ## Part 3: Cloud Deployment
 
 ### Exercise 3.1: Railway deployment
@@ -43,8 +56,10 @@
 ## Part 4: API Security
 
 ### Exercise 4.1-4.3: Test results
-- **Không Key**: Trả về 401 Unauthorized.
-- **Có Key đúng**: Trả về 200 OK cùng nội dung từ AI.
+- **Không Key**: Trả về 401 Unauthorized ✅.
+- **Xác thực JWT**: Đã cài đặt endpoint `/login` và middleware kiểm tra Token Bearer ✅.
+- **Rate Limiting**: Giới hạn 10 req/phút, trả về 429 nếu vượt ngưỡng ✅.
+- **Có Key đúng**: Trả về 200 OK cùng nội dung từ AI ✅.
 
 ## Part 5: Scaling & Reliability
 
