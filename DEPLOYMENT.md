@@ -1,7 +1,7 @@
 # Deployment Information
 
 ## Public URL
-https://day12-lab-production.up.railway.app
+https://just-solace-production-1642.up.railway.app
 
 ## Platform
 Railway
@@ -10,14 +10,13 @@ Railway
 
 ### Health Check
 ```bash
-curl https://day12-lab-production.up.railway.app/health
-# Expected: {"status": "ok", "version": "1.0.0", ...}
+curl https://just-solace-production-1642.up.railway.app/health
 ```
 
 ### API Test (with authentication)
 ```bash
-curl -X POST https://day12-lab-production.up.railway.app/ask \
-  -H "X-API-Key: agent-secret-key-123" \
+curl -X POST https://just-solace-production-1642.up.railway.app/ask \
+  -H "X-API-Key: dao-van-cong-secret-123" \
   -H "Content-Type: application/json" \
   -d '{"question": "What is Docker?"}'
 ```

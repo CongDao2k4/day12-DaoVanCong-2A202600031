@@ -37,7 +37,7 @@
 ## Part 3: Cloud Deployment
 
 ### Exercise 3.1: Railway deployment
-- URL: https://day12-lab-production.up.railway.app (Ví dụ)
+- URL: https://just-solace-production-1642.up.railway.app
 - Screenshot: [screenshots/railway_deploy.png]
 
 ## Part 4: API Security
