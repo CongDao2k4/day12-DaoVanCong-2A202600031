@@ -1,6 +1,6 @@
 #  Delivery Checklist — Day 12 Lab Submission
 
-> **Student Name:** Dao Van Cong
+> **Student Name:** Đào Văn Công
 > **Student ID:** 2A202600031
 > **Date:** 17/04/2026
 > **Final Project Name:** StudentOps AI Agent
@@ -47,10 +47,10 @@ File `DEPLOYMENT.md` updated with the active Railway URL.
 
 | Test Case | Method | Endpoint | Result |
 |-----------|--------|----------|--------|
-| Liveness | GET | `/health` | ✅ 200 OK |
-| Readiness | GET | `/ready` | ✅ 200 OK (DB Probes) |
-| Security | POST | `/chat` (No Key) | ✅ 401 Unauthorized |
-| Chat Logic | POST | `/chat` (With Key) | ✅ 200 OK (LLM Response) |
+| Liveness | GET | `/health` | 200 OK |
+| Readiness | GET | `/ready` | 200 OK (DB Probes) |
+| Security | POST | `/chat` (No Key) | 401 Unauthorized |
+| Chat Logic | POST | `/chat` (With Key) | 200 OK (LLM Response) |
 
 ---
 
